@@ -49,6 +49,7 @@ def draw_text(surface, text, font, color, x, y):
     text_obj = font.render(text, True, color)
     surface.blit(text_obj, (x, y))
 
+
 class Fireball(pygame.sprite.Sprite):
     def __init__(self, x, y, target_x, target_y):
         super().__init__()
@@ -148,7 +149,6 @@ class Hero(pygame.sprite.Sprite):
             self.vel_y = -16
             self.on_ground = False
 
-
         self.rect.x += self.vel_x
         self.collide(platforms, 'x')
         self.rect.y += self.vel_y
@@ -183,6 +183,52 @@ class Hero(pygame.sprite.Sprite):
                     if self.vel_y < 0:
                         self.rect.top = platform.rect.bottom
 
+
+def show_rules():
+    running = True
+    while running:
+        screen.fill(WHITE)
+
+        draw_text(screen, "Правила игры 'Jumpthrow'", BIG_FONT, (0, 128, 255), WIDTH // 2 - 250, HEIGHT // 2 - 50)
+
+        """Правила игры"""
+        rules = [
+            "1. Цель игры: избегать различных атак и добораться до",
+            "конца уровня.",
+            "2. Управление:",
+            "   - Стрелка влево (←): Двигайтесь влево.",
+            "",
+            "   - Стрелка вправо (→): Двигайтесь вправо.",
+            "",
+            "   - Стрелка вверх (↑): Прыгните.",
+            "",
+            "   - Esc: Вернуться в главное меню.",
+            "",
+            "3. У героя 3 жизни. Будьте осторожны!",
+            "4. Создавайте свои уровни и выбирайте их для игры.",
+            "5. Если здоровье героя достигнет 0, игра закончится.",
+            "            Нажмите ESC, чтобы вернуться в меню."
+        ]
+
+        background_image = pygame.image.load('data/images/background_rules.png')
+        background_image = pygame.transform.scale(background_image, (WIDTH, HEIGHT))
+        screen.blit(background_image, (0, 0))
+
+        for i, rule in enumerate(rules):
+            draw_text(screen, rule, FONT, (255, 255, 255), 370, HEIGHT // 6 - 30 + i * 40)
+
+        pygame.draw.rect(screen, (5, 4, 4), (WIDTH - 350, 0, WIDTH, 95))
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+
+
 def main_menu():
     while True:
         screen.fill(WHITE)
@@ -209,6 +255,7 @@ def main_menu():
                     sound3.play()
                 elif event.key == pygame.K_4:
                     sound1.play()
+                    show_rules()
                 elif event.key == pygame.K_5:
                     terminate()
 
