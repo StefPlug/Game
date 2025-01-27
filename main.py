@@ -49,11 +49,17 @@ def draw_text(surface, text, font, color, x, y):
     text_obj = font.render(text, True, color)
     surface.blit(text_obj, (x, y))
 
+def draw_health_hearts(surface, hearts):
+    heart_image = pygame.image.load('data/images/heart.png')
+    heart_image = pygame.transform.scale(heart_image, (40, 40))
+    for i in range(hearts):
+        surface.blit(heart_image, (10 + i * 50, 30))
+
 
 class Fireball(pygame.sprite.Sprite):
     def __init__(self, x, y, target_x, target_y):
         super().__init__()
-        fireball_image = pygame.image.load('fireball.png')
+        fireball_image = pygame.image.load('data/images/fireball.png')
         fireball_image = pygame.transform.scale(fireball_image, (73, 32))
         self.image = fireball_image
         self.rect = self.image.get_rect(center=(x, y))
@@ -73,7 +79,7 @@ class Fireball(pygame.sprite.Sprite):
 class Dragon(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
-        dragon_image = pygame.image.load('dragon.png')
+        dragon_image = pygame.image.load('data/images/dragon.png')
         dragon_image = pygame.transform.scale(dragon_image, (200, 200))
         self.image = dragon_image
         self.rect = self.image.get_rect(topleft=(x, y))
@@ -97,13 +103,13 @@ class Dragon(pygame.sprite.Sprite):
 class Hero(pygame.sprite.Sprite):
     def __init__(self, x, y):
         super().__init__()
-        self.walk_right = [pygame.transform.scale(pygame.image.load(f'images/photo{i}.png'), (200, 200)) for i in
+        self.walk_right = [pygame.transform.scale(pygame.image.load(f'data/images/photo{i}.png'), (200, 200)) for i in
                            range(13, 24)]
-        self.walk_left = [pygame.transform.scale(pygame.image.load(f'output2/photo{i}.png'), (200, 200)) for i in
+        self.walk_left = [pygame.transform.scale(pygame.image.load(f'data/output2/photo{i}.png'), (200, 200)) for i in
                           range(13, 24)]
-        self.jump_left = [pygame.transform.scale(pygame.image.load(f'images/photo{i}.png'), (200, 200)) for i in
+        self.jump_left = [pygame.transform.scale(pygame.image.load(f'data/images/photo{i}.png'), (200, 200)) for i in
                           range(2, 9)]
-        self.jump_right = [pygame.transform.scale(pygame.image.load(f'output2/photo{i}.png'), (200, 200)) for i in
+        self.jump_right = [pygame.transform.scale(pygame.image.load(f'data/output2/photo{i}.png'), (200, 200)) for i in
                            range(2, 9)]
 
         self.image = self.walk_right[0]
@@ -132,9 +138,9 @@ class Hero(pygame.sprite.Sprite):
             self.last_action = 1
         else:
             if self.last_action == 1:
-                self.image = pygame.transform.scale(pygame.image.load(f'images/photo{11}.png'), (200, 200))
+                self.image = pygame.transform.scale(pygame.image.load(f'data/images/photo{11}.png'), (200, 200))
             else:
-                self.image = pygame.transform.scale(pygame.image.load(f'output2/photo{11}.png'), (200, 200))
+                self.image = pygame.transform.scale(pygame.image.load(f'data/output2/photo{11}.png'), (200, 200))
 
         if not self.on_ground:
             self.vel_y += 0.5
@@ -228,6 +234,72 @@ def show_rules():
                 if event.key == pygame.K_ESCAPE:
                     running = False
 
+def game_loop(username):
+    global all_sprites, fireballs
+    all_sprites.empty()
+    fireballs.empty()
+    font = pygame.font.Font(None, 36)
+    running = True
+
+    hero = Hero(0, HEIGHT)
+    all_sprites.add(hero)
+
+    for platform in platforms:
+        all_sprites.add(platform)
+
+    dragon = Dragon(600, 100)
+    all_sprites.add(dragon)
+
+    clock = pygame.time.Clock()
+
+    while running:
+        keys = pygame.key.get_pressed()
+        screen.blit(background, (0, 0))
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    running = False
+
+        hero.update(keys, platforms)
+        dragon.update(hero)
+        fireballs.update()
+
+        if pygame.sprite.spritecollide(hero, fireballs, True):
+            hero.health -= 1
+            if hero.health <= 0:
+                game_over()
+
+        for platform in platforms:
+            pygame.draw.rect(screen, (0, 0, 255), platform)
+
+        all_sprites.draw(screen)
+
+        draw_text(screen, f"Игрок: {username}", FONT, WHITE, 10, 10)
+        draw_health_hearts(screen, hero.health)
+
+        text_surface = font.render("Выйти в меню (ESC)", True, (255, 255, 0))
+        screen.blit(text_surface, (1650, 10))
+
+        pygame.display.flip()
+        clock.tick(FPS)
+
+def game_over():
+    while True:
+        screen.fill(BLACK)
+        draw_text(screen, "Вы проиграли!", BIG_FONT, WHITE, WIDTH // 2 - 250, HEIGHT // 2 - 50)
+        draw_text(screen, "Нажмите ESC для выхода", FONT, WHITE, WIDTH // 2 - 250, HEIGHT // 2 + 50)
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    terminate()
 
 def main_menu():
     while True:
@@ -285,7 +357,7 @@ def registration():
                         try:
                             cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
                             conn.commit()
-                            """game_loop(username) тут типа будет сама игра запускаться"""
+                            game_loop(username)
                             return
                         except sqlite3.IntegrityError:
                             print("Логин уже существует!")
@@ -293,7 +365,7 @@ def registration():
                         cursor.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
                         user = cursor.fetchone()
                         if user:
-                            """game_loop(username)"""
+                            game_loop(username)
                             return
                         else:
                             print("Неверный логин или пароль!")
