@@ -1,6 +1,8 @@
 import pygame
 import sqlite3
 import sys
+import os
+import pickle
 import random
 import math
 
@@ -210,6 +212,12 @@ def create_level():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 running = False
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    save_level(current_platforms)
+                    platforms.empty()
+                    all_sprites.empty()
+                    running = False
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
                     platform = Platform(event.pos[0], event.pos[1], 200, 20)
@@ -227,6 +235,74 @@ def create_level():
 
     pygame.display.set_mode((WIDTH, HEIGHT))
     platforms.empty()
+
+
+def save_level(platforms):
+    """Сохранение уровня в файл."""
+    level_data = [(platform.rect.x, platform.rect.y) for platform in platforms]
+    if not os.path.exists('levels'):
+        os.makedirs('levels')
+    level_number = len(os.listdir('levels')) + 1  # Нумерация уровней
+    with open(f'levels/level_{level_number}.pkl', 'wb') as f:
+        pickle.dump(level_data, f)
+
+
+def load_levels():
+    """Загрузка уровней из папки levels."""
+    levels = []
+    if os.path.exists('levels'):
+        for filename in os.listdir('levels'):
+            if filename.endswith('.pkl'):
+                levels.append(filename)
+    return levels
+
+
+def select_level():
+    """Выбор уровня из сохраненных файлов."""
+    levels = load_levels()
+    if not levels:
+        return  # Если уровни не найдены, ничего не делаем
+
+    selected_level = None
+    while selected_level is None:
+        screen.fill(WHITE)
+        draw_text(screen, "Выберите уровень", FONT, BLACK, WIDTH // 2 - 150, HEIGHT // 4)
+
+        for index, level in enumerate(levels):
+            draw_text(screen, f"{index + 1}. {level}", FONT, BLACK, WIDTH // 2 - 150, HEIGHT // 4 + 50 + index * 50)
+
+        draw_text(screen, "ESC - выход", FONT, BLACK, WIDTH // 2 - 150, HEIGHT // 4 + 50 + len(levels) * 50 + 20)
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            if event.type == pygame.KEYDOWN:
+                sound3.play()
+                if event.key == pygame.K_ESCAPE:
+                    return
+                if event.key >= pygame.K_1 and event.key <= pygame.K_9:
+                    index = event.key - pygame.K_1
+                    if index < len(levels):
+                        selected_level = levels[index]  # Сохраняем выбранный уровень в папку
+
+    """Загружаем выбранный уровень"""
+    load_level(selected_level)
+
+
+def load_level(level_filename):
+    """Загрузка уровня из файла."""
+    with open(f'levels/{level_filename}', 'rb') as f:
+        level_data = pickle.load(f)
+
+    platforms.empty()
+    all_sprites.empty()
+
+    for x, y in level_data:
+        platform = Platform(x, y, 200, 40)
+        platforms.add(platform)
+        all_sprites.add(platform)
 
 def show_rules():
     running = True
@@ -364,6 +440,7 @@ def main_menu():
                     create_level()
                 elif event.key == pygame.K_3:
                     sound3.play()
+                    select_level()
                 elif event.key == pygame.K_4:
                     sound1.play()
                     show_rules()
