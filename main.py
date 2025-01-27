@@ -30,17 +30,16 @@ CREATE TABLE IF NOT EXISTS users (
 """)
 conn.commit()
 
-def draw_text(surface, text, font, color, x, y):
-    text_obj = font.render(text, True, color)
-    surface.blit(text_obj, (x, y))
 
 def terminate():
     pygame.quit()
     sys.exit()
 
+
 def draw_text(surface, text, font, color, x, y):
     text_obj = font.render(text, True, color)
     surface.blit(text_obj, (x, y))
+
 
 def main_menu():
     while True:
@@ -62,6 +61,7 @@ def main_menu():
                     registration()
                 elif event.key == pygame.K_4:
                     terminate()
+
 
 def registration():
     username = ""
@@ -114,6 +114,7 @@ def registration():
                         username += event.unicode
                     elif len(password) < 10:
                         password += event.unicode
+
 
 if __name__ == "__main__":
     main_menu()
