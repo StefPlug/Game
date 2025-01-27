@@ -55,6 +55,16 @@ def draw_health_hearts(surface, hearts):
     for i in range(hearts):
         surface.blit(heart_image, (10 + i * 50, 30))
 
+class Platform(pygame.sprite.Sprite):
+    def __init__(self, x, y, width, height):
+        super().__init__()
+        stone_texture = pygame.image.load('data/images/stone.png')
+        stone_texture = pygame.transform.scale(stone_texture, (200, 40))
+        self.image = stone_texture
+        self.rect = self.image.get_rect(topleft=(x, y))
+
+    def draw(self, surface):
+        surface.blit(self.image, self.rect.topleft)
 
 class Fireball(pygame.sprite.Sprite):
     def __init__(self, x, y, target_x, target_y):
@@ -189,6 +199,34 @@ class Hero(pygame.sprite.Sprite):
                     if self.vel_y < 0:
                         self.rect.top = platform.rect.bottom
 
+def create_level():
+    second_window = pygame.display.set_mode((WIDTH, HEIGHT))
+    pygame.display.set_caption("Конструктор уровней")
+    font = pygame.font.Font(None, 36)
+    running = True
+    current_platforms = []
+
+    while running:
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                running = False
+            if event.type == pygame.MOUSEBUTTONDOWN:
+                if event.button == 1:
+                    platform = Platform(event.pos[0], event.pos[1], 200, 20)
+                    platforms.add(platform)
+                    all_sprites.add(platform)
+                    current_platforms.append(platform)
+
+        second_window.blit(background, (0, 0))
+        all_sprites.draw(second_window)
+
+        text_surface = font.render("Выйти (ESC)", True, (0, 0, 0))
+        second_window.blit(text_surface, (10, 10))
+
+        pygame.display.flip()
+
+    pygame.display.set_mode((WIDTH, HEIGHT))
+    platforms.empty()
 
 def show_rules():
     running = True
@@ -323,6 +361,7 @@ def main_menu():
                     registration()
                 elif event.key == pygame.K_2:
                     sound3.play()
+                    create_level()
                 elif event.key == pygame.K_3:
                     sound3.play()
                 elif event.key == pygame.K_4:
