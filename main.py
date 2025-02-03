@@ -1,33 +1,54 @@
-import pygame
-import sqlite3
-import sys
-import os
-import pickle
-import random
-import math
+import pygame, sqlite3, sys, random
+import os, pickle, math
 
 pygame.init()
 
 WIDTH, HEIGHT = 1920, 1080
-WHITE = (255, 255, 255)
-BLACK = (0, 0, 0)
 FPS = 60
 FONT = pygame.font.Font('data/Font/Arial.ttf', 48)
 BIG_FONT = pygame.font.Font('data/Font/Arial.ttf', 96)
 
 screen = pygame.display.set_mode((WIDTH, HEIGHT))
 pygame.display.set_caption("Jumpthrow")
+
 background = pygame.image.load('data/images/background.jpg')
 background = pygame.transform.scale(background, (WIDTH, HEIGHT))
-sound1 = pygame.mixer.Sound("data/Sounds/select.mp3")
-sound2 = pygame.mixer.Sound("data/Sounds/klavisha.mp3")
-sound3 = pygame.mixer.Sound("data/Sounds/push.mp3")
 
-all_sprites = pygame.sprite.Group()
-platforms = pygame.sprite.Group()
-fireballs = pygame.sprite.Group()
+sound1 = pygame.mixer.Sound('data/Sounds/select.mp3')
+sound2 = pygame.mixer.Sound('data/Sounds/klavisha.mp3')
+sound3 = pygame.mixer.Sound('data/Sounds/push.mp3')
 
-conn = sqlite3.connect("game_data.db")
+current_level = None
+nickname = ''
+change = 0
+
+
+def terminate():
+    pygame.quit()
+    sys.exit()
+
+
+class Platform(pygame.sprite.Sprite):
+    def __init__(self, x, y, width, height):
+        super().__init__()
+        stone_texture = pygame.image.load('data/images/stone.png')
+        stone_texture = pygame.transform.scale(stone_texture, (150, 25))
+        self.image = stone_texture
+        self.rect = self.image.get_rect(topleft=(x, y))
+
+    def draw(self, surface):
+        surface.blit(self.image, self.rect.topleft)
+
+
+class Door(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.image.load('data/images/door.png')  # Замените на путь к изображению двери
+        self.image = pygame.transform.scale(self.image, (100, 200))  # Измените размер по необходимости
+        self.rect = self.image.get_rect(topleft=(x, y))
+
+
+conn = sqlite3.connect("data/game_data.db")
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -41,15 +62,17 @@ CREATE TABLE IF NOT EXISTS users (
 """)
 conn.commit()
 
-
-def terminate():
-    pygame.quit()
-    sys.exit()
+all_sprites = pygame.sprite.Group()
+platforms = pygame.sprite.Group()
+fireballs = pygame.sprite.Group()
+fireworks = pygame.sprite.Group()
+doors = pygame.sprite.Group()
 
 
 def draw_text(surface, text, font, color, x, y):
     text_obj = font.render(text, True, color)
     surface.blit(text_obj, (x, y))
+
 
 def draw_health_hearts(surface, hearts):
     heart_image = pygame.image.load('data/images/heart.png')
@@ -57,16 +80,6 @@ def draw_health_hearts(surface, hearts):
     for i in range(hearts):
         surface.blit(heart_image, (10 + i * 50, 30))
 
-class Platform(pygame.sprite.Sprite):
-    def __init__(self, x, y, width, height):
-        super().__init__()
-        stone_texture = pygame.image.load('data/images/stone.png')
-        stone_texture = pygame.transform.scale(stone_texture, (200, 40))
-        self.image = stone_texture
-        self.rect = self.image.get_rect(topleft=(x, y))
-
-    def draw(self, surface):
-        surface.blit(self.image, self.rect.topleft)
 
 class Fireball(pygame.sprite.Sprite):
     def __init__(self, x, y, target_x, target_y):
@@ -84,7 +97,27 @@ class Fireball(pygame.sprite.Sprite):
     def update(self):
         self.rect.x += self.vel_x
         self.rect.y += self.vel_y
+
         if self.rect.x < 0 or self.rect.x > WIDTH or self.rect.y < 0 or self.rect.y > HEIGHT:
+            self.kill()
+
+        if pygame.sprite.spritecollide(self, platforms, False):
+            self.kill()
+            explosion = Explosion(self.rect.centerx, self.rect.centery)
+            all_sprites.add(explosion)
+
+
+class Explosion(pygame.sprite.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.image = pygame.image.load('data/images/explosion.png')
+        self.image = pygame.transform.scale(self.image, (100, 100))
+        self.rect = self.image.get_rect(center=(x, y))
+        self.lifetime = 20
+
+    def update(self):
+        self.lifetime -= 1
+        if self.lifetime <= 0:
             self.kill()
 
 
@@ -113,27 +146,29 @@ class Dragon(pygame.sprite.Sprite):
 
 
 class Hero(pygame.sprite.Sprite):
+    """Класс персонажа"""
+
     def __init__(self, x, y):
         super().__init__()
-        self.walk_right = [pygame.transform.scale(pygame.image.load(f'data/images/photo{i}.png'), (200, 200)) for i in
+        self.walk_right = [pygame.transform.scale(pygame.image.load(f'data/images/photo{i}.png'), (150, 150)) for i in
                            range(13, 24)]
-        self.walk_left = [pygame.transform.scale(pygame.image.load(f'data/output2/photo{i}.png'), (200, 200)) for i in
+        self.walk_left = [pygame.transform.scale(pygame.image.load(f'data/output2/photo{i}.png'), (150, 150)) for i in
                           range(13, 24)]
-        self.jump_left = [pygame.transform.scale(pygame.image.load(f'data/images/photo{i}.png'), (200, 200)) for i in
+        self.jump_left = [pygame.transform.scale(pygame.image.load(f'data/images/photo{i}.png'), (150, 150)) for i in
                           range(2, 9)]
-        self.jump_right = [pygame.transform.scale(pygame.image.load(f'data/output2/photo{i}.png'), (200, 200)) for i in
+        self.jump_right = [pygame.transform.scale(pygame.image.load(f'data/output2/photo{i}.png'), (150, 150)) for i in
                            range(2, 9)]
 
         self.image = self.walk_right[0]
         self.rect = self.image.get_rect(topleft=(x, y))
         self.vel_x = 0
         self.vel_y = 0
-        self.on_ground = False
+        self.on_ground = False  # проверка на землю
         self.index_walk = 0
         self.index_jump = 0
         self.animation_speed = 0.13
         self.last_update = 0
-        self.last_action = 1
+        self.last_action = 1  # пременная нужна для того чтобы понять в какую сторону поворачивать персонажа
         self.health = 10
         self.velocity_y = 0
 
@@ -150,12 +185,13 @@ class Hero(pygame.sprite.Sprite):
             self.last_action = 1
         else:
             if self.last_action == 1:
-                self.image = pygame.transform.scale(pygame.image.load(f'data/images/photo{11}.png'), (200, 200))
+                self.image = pygame.transform.scale(pygame.image.load(f'data/images/photo{11}.png'), (150, 150))
             else:
-                self.image = pygame.transform.scale(pygame.image.load(f'data/output2/photo{11}.png'), (200, 200))
+                self.image = pygame.transform.scale(pygame.image.load(f'data/output2/photo{11}.png'), (150, 150))
+            pygame.mixer.pause()
 
         if not self.on_ground:
-            self.vel_y += 0.5
+            self.vel_y += 0.75
             if self.last_action == 1:
                 self.image = self.jump_left[int(self.index_jump)]
             else:
@@ -201,12 +237,45 @@ class Hero(pygame.sprite.Sprite):
                     if self.vel_y < 0:
                         self.rect.top = platform.rect.bottom
 
+
+class Particle:
+    def __init__(self, x, y):
+        self.x = x
+        self.y = y
+        self.COLORS = [(255, 0, 0), (0, 255, 0), (0, 0, 255), (255, 255, 0), (255, 0, 255), (0, 255, 255)]
+        self.size = random.randint(5, 10)
+        self.color = random.choice(self.COLORS)
+        self.speed_x = random.uniform(-2, 2)
+        self.speed_y = random.uniform(-2, -5)
+
+    def update(self):
+        self.x += self.speed_x
+        self.y += self.speed_y
+        self.speed_y += 0.1  # Гравитация
+
+    def draw(self, screen):
+        pygame.draw.circle(screen, self.color, (int(self.x), int(self.y)), self.size)
+
+
+def create_fireworks(x, y):
+    """Создание частиц(салюта)"""
+    particles = []
+    for _ in range(100):
+        particles.append(Particle(x, y))
+    pygame.mixer.music.load("data/sounds/fireworks_sound.mp3")
+    pygame.mixer.music.set_volume(0.5)
+    pygame.mixer.music.play(-1)
+    return particles
+
+
 def create_level():
+    """Создание уровня"""
     second_window = pygame.display.set_mode((WIDTH, HEIGHT))
     pygame.display.set_caption("Конструктор уровней")
     font = pygame.font.Font(None, 36)
     running = True
-    current_platforms = []
+    platforms_list = []
+    doors_list = []
 
     while running:
         for event in pygame.event.get():
@@ -214,16 +283,21 @@ def create_level():
                 running = False
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
-                    save_level(current_platforms)
+                    save_level(platforms_list)
                     platforms.empty()
                     all_sprites.empty()
                     running = False
             if event.type == pygame.MOUSEBUTTONDOWN:
                 if event.button == 1:
-                    platform = Platform(event.pos[0], event.pos[1], 200, 20)
+                    platform = Platform(event.pos[0], event.pos[1], 150, 15)
                     platforms.add(platform)
                     all_sprites.add(platform)
-                    current_platforms.append(platform)
+                    platforms_list.append(platform)
+                if event.button == 3:
+                    door = Door(event.pos[0], event.pos[1])
+                    doors.add(door)
+                    all_sprites.add(door)
+                    doors_list.append(door)
 
         second_window.blit(background, (0, 0))
         all_sprites.draw(second_window)
@@ -240,38 +314,41 @@ def create_level():
 def save_level(platforms):
     """Сохранение уровня в файл."""
     level_data = [(platform.rect.x, platform.rect.y) for platform in platforms]
-    if not os.path.exists('levels'):
-        os.makedirs('levels')
-    level_number = len(os.listdir('levels')) + 1  # Нумерация уровней
-    with open(f'levels/level_{level_number}.pkl', 'wb') as f:
+    for door in doors:
+        level_data.append((door.rect.x, door.rect.y))
+    if not os.path.exists('data/levels'):
+        os.makedirs('data/levels')
+    level_number = len(os.listdir('data/levels')) + 1  # Нумерация уровнеи
+    with open(f'data/levels/level_{level_number}.pkl', 'wb') as f:
         pickle.dump(level_data, f)
 
 
 def load_levels():
     """Загрузка уровней из папки levels."""
     levels = []
-    if os.path.exists('levels'):
-        for filename in os.listdir('levels'):
+    if os.path.exists('data/levels'):
+        for filename in os.listdir('data/levels'):
             if filename.endswith('.pkl'):
                 levels.append(filename)
     return levels
 
 
 def select_level():
+    global current_level
     """Выбор уровня из сохраненных файлов."""
     levels = load_levels()
     if not levels:
-        return  # Если уровни не найдены, ничего не делаем
+        return
 
     selected_level = None
     while selected_level is None:
-        screen.fill(WHITE)
-        draw_text(screen, "Выберите уровень", FONT, BLACK, WIDTH // 2 - 150, HEIGHT // 4)
+        screen.fill((255, 255, 255))
+        draw_text(screen, "Выберите уровень", FONT, (0, 0, 0), WIDTH // 2 - 150, HEIGHT // 4)
 
         for index, level in enumerate(levels):
-            draw_text(screen, f"{index + 1}. {level}", FONT, BLACK, WIDTH // 2 - 150, HEIGHT // 4 + 50 + index * 50)
+            draw_text(screen, f"{index + 1}. {level}", FONT, (0, 0, 0), WIDTH // 2 - 150, HEIGHT // 4 + 50 + index * 50)
 
-        draw_text(screen, "ESC - выход", FONT, BLACK, WIDTH // 2 - 150, HEIGHT // 4 + 50 + len(levels) * 50 + 20)
+        draw_text(screen, "ESC - выход", FONT, (0, 0, 0), WIDTH // 2 - 150, HEIGHT // 4 + 50 + len(levels) * 50 + 20)
 
         pygame.display.flip()
 
@@ -285,29 +362,94 @@ def select_level():
                 if event.key >= pygame.K_1 and event.key <= pygame.K_9:
                     index = event.key - pygame.K_1
                     if index < len(levels):
-                        selected_level = levels[index]  # Сохраняем выбранный уровень в папку
+                        selected_level = levels[index]
 
+    current_level = selected_level
     """Загружаем выбранный уровень"""
     load_level(selected_level)
 
 
 def load_level(level_filename):
+    global nickname, current_level, change, doors
     """Загрузка уровня из файла."""
-    with open(f'levels/{level_filename}', 'rb') as f:
+    with open(f'data/levels/{level_filename}', 'rb') as f:
         level_data = pickle.load(f)
 
     platforms.empty()
+    doors.empty()
     all_sprites.empty()
 
-    for x, y in level_data:
+    for x, y in level_data[:-1]:
         platform = Platform(x, y, 200, 40)
         platforms.add(platform)
         all_sprites.add(platform)
 
+    door = Door(level_data[-1][0], level_data[-1][1])
+    doors.add(door)
+    all_sprites.add(door)
+
+    current_level = level_filename
+    if change == 0:
+        main_menu()
+    else:
+        game(nickname)
+
+
+def load_next_level(current_level):
+    """Загрузка следующего уровня."""
+    levels = load_levels()
+    if levels:
+        current_index = levels.index(current_level)
+        if current_index + 1 < len(levels):
+            load_level(levels[current_index + 1])
+            return True
+    return False
+
+
+def show_completion_screen():
+    """Показать экран завершения игры."""
+    pygame.mixer.music.load("data/Sounds/winning_sound.mp3")
+    pygame.mixer.music.set_volume(0.5)
+    pygame.mixer.music.play(-1)
+    screen = pygame.display.set_mode((WIDTH, HEIGHT))
+    clock = pygame.time.Clock()
+    particles = create_fireworks(WIDTH // 2, HEIGHT // 2)
+    last_firework_time = 0
+    running = True
+
+    while running:
+        current_time = pygame.time.get_ticks()
+        if current_time - last_firework_time > 2000:
+            x = random.randint(0, WIDTH)
+            y = random.randint(0, HEIGHT // 2)
+            particles.extend(create_fireworks(x, y))
+            particles.extend(create_fireworks(x // 2, y // 2))
+            last_firework_time = current_time
+
+        screen.fill((0, 0, 0))
+        draw_text(screen, "Поздравляем!", BIG_FONT, (255, 255, 255), WIDTH // 2 - 250, HEIGHT // 2 - 50)
+        draw_text(screen, "Вы прошли игру!", BIG_FONT, (255, 255, 255), WIDTH // 2 - 290, HEIGHT // 2 + 50)
+        draw_text(screen, "Нажмите ESC для выхода", FONT, (255, 255, 255), WIDTH // 2 - 250, HEIGHT // 2 + 150)
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_ESCAPE:
+                    terminate()
+
+        for particle in particles:
+            particle.update()
+            particle.draw(screen)
+
+        pygame.display.flip()
+        clock.tick(FPS)
+
+
 def show_rules():
     running = True
     while running:
-        screen.fill(WHITE)
+        screen.fill((255, 255, 255))
 
         draw_text(screen, "Правила игры 'Jumpthrow'", BIG_FONT, (0, 128, 255), WIDTH // 2 - 250, HEIGHT // 2 - 50)
 
@@ -348,8 +490,75 @@ def show_rules():
                 if event.key == pygame.K_ESCAPE:
                     running = False
 
-def game_loop(username):
-    global all_sprites, fireballs
+
+def registration():
+    global nickname
+    username = ""
+    password = ""
+    is_register = True
+
+    while True:
+        screen.fill((255, 255, 255))
+        draw_text(screen, "Регистрация" if is_register else "Вход", FONT, (0, 0, 0), WIDTH // 2 - 100, HEIGHT // 4)
+        draw_text(screen, f"Логин: {username}", FONT, (0, 0, 0), WIDTH // 2 - 100, HEIGHT // 2 - 50)
+        draw_text(screen, f"Пароль: {'*' * len(password)}", FONT, (0, 0, 0), WIDTH // 2 - 100, HEIGHT // 2)
+        draw_text(screen, "Enter - подтвердить", FONT, (0, 0, 0), WIDTH // 2 - 100, HEIGHT // 2 + 100)
+        draw_text(screen, "Tab - переключить (регистрация/вход)", FONT, (0, 0, 0), WIDTH // 2 - 100, HEIGHT // 2 + 150)
+
+        pygame.display.flip()
+
+        for event in pygame.event.get():
+            if event.type == pygame.QUIT:
+                terminate()
+
+            if event.type == pygame.KEYDOWN:
+                if event.key == pygame.K_RETURN:
+                    sound1.play()
+                    if is_register:
+                        try:
+                            cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
+                            conn.commit()
+                            pygame.mixer.music.load("data/Sounds/background_music.mp3")
+                            pygame.mixer.music.set_volume(0.5)
+                            pygame.mixer.music.play(-1)
+                            game(username)
+                            nickname = username
+                            return
+                        except Exception:
+                            print("Логин уже существует!")
+                    else:
+                        cursor.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
+                        user = cursor.fetchone()
+                        if user:
+                            pygame.mixer.music.load("data/Sounds/background_music.mp3")
+                            pygame.mixer.music.set_volume(0.5)
+                            pygame.mixer.music.play(-1)
+                            game(username)
+                            nickname = username
+                            return
+                        else:
+                            print("Неверный логин или пароль!")
+
+                elif event.key == pygame.K_TAB:
+                    sound1.play()
+                    is_register = not is_register
+
+                elif event.key == pygame.K_BACKSPACE:
+                    sound2.play()
+                    if len(password) > 0:
+                        password = password[:-1]
+                    elif len(username) > 0:
+                        username = username[:-1]
+                else:
+                    sound2.play()
+                    if len(username) < 10 and len(password) == 0:
+                        username += event.unicode
+                    elif len(password) < 10:
+                        password += event.unicode
+
+
+def game(username):
+    global all_sprites, fireballs, current_level, change
     all_sprites.empty()
     fireballs.empty()
     font = pygame.font.Font(None, 36)
@@ -364,6 +573,9 @@ def game_loop(username):
     dragon = Dragon(600, 100)
     all_sprites.add(dragon)
 
+    for door in doors:
+        all_sprites.add(door)
+
     clock = pygame.time.Clock()
 
     while running:
@@ -375,6 +587,8 @@ def game_loop(username):
                 terminate()
             if event.type == pygame.KEYDOWN:
                 if event.key == pygame.K_ESCAPE:
+                    change = 0
+                    pygame.mixer.music.stop()
                     running = False
 
         hero.update(keys, platforms)
@@ -386,12 +600,24 @@ def game_loop(username):
             if hero.health <= 0:
                 game_over()
 
+        for explosion in all_sprites:
+            if isinstance(explosion, Explosion):
+                explosion.update()
+
         for platform in platforms:
             pygame.draw.rect(screen, (0, 0, 255), platform)
 
+        # Проверка столкновения героя с дверью
+        if pygame.sprite.spritecollide(hero, doors, False):
+            change = 1
+            if not load_next_level(current_level):
+                show_completion_screen()
+                return
+            running = False
+
         all_sprites.draw(screen)
 
-        draw_text(screen, f"Игрок: {username}", FONT, WHITE, 10, 10)
+        draw_text(screen, f"Игрок: {username}", FONT, (255, 255, 255), 10, 10)
         draw_health_hearts(screen, hero.health)
 
         text_surface = font.render("Выйти в меню (ESC)", True, (255, 255, 0))
@@ -400,11 +626,12 @@ def game_loop(username):
         pygame.display.flip()
         clock.tick(FPS)
 
+
 def game_over():
     while True:
-        screen.fill(BLACK)
-        draw_text(screen, "Вы проиграли!", BIG_FONT, WHITE, WIDTH // 2 - 250, HEIGHT // 2 - 50)
-        draw_text(screen, "Нажмите ESC для выхода", FONT, WHITE, WIDTH // 2 - 250, HEIGHT // 2 + 50)
+        screen.fill((0, 0, 0))
+        draw_text(screen, "Вы проиграли!", BIG_FONT, (255, 255, 255), WIDTH // 2 - 250, HEIGHT // 2 - 50)
+        draw_text(screen, "Нажмите ESC для выхода", FONT, (255, 255, 255), WIDTH // 2 - 250, HEIGHT // 2 + 50)
 
         pygame.display.flip()
 
@@ -415,15 +642,17 @@ def game_over():
                 if event.key == pygame.K_ESCAPE:
                     terminate()
 
+
 def main_menu():
-    while True:
-        screen.fill(WHITE)
-        draw_text(screen, "Jumpthrow", FONT, BLACK, WIDTH // 2 - 100, HEIGHT // 4)
-        draw_text(screen, "1. Начать игру", FONT, BLACK, WIDTH // 2 - 100, HEIGHT // 2 - 50)
-        draw_text(screen, "2. Создать уровень", FONT, BLACK, WIDTH // 2 - 100, HEIGHT // 2)
-        draw_text(screen, "3. Выбрать уровень", FONT, BLACK, WIDTH // 2 - 100, HEIGHT // 2 + 50)
-        draw_text(screen, "4. Правила игры", FONT, BLACK, WIDTH // 2 - 100, HEIGHT // 2 + 100)
-        draw_text(screen, "5. Выход", FONT, BLACK, WIDTH // 2 - 100, HEIGHT // 2 + 150)
+    running = True
+    while running:
+        screen.fill((255, 255, 255))
+        draw_text(screen, "Jumpthrow", FONT, (0, 0, 0), WIDTH // 2 - 100, HEIGHT // 4)
+        draw_text(screen, "1. Начать игру", FONT, (0, 0, 0), WIDTH // 2 - 100, HEIGHT // 2 - 50)
+        draw_text(screen, "2. Создать уровень", FONT, (0, 0, 0), WIDTH // 2 - 100, HEIGHT // 2)
+        draw_text(screen, "3. Выбрать уровень", FONT, (0, 0, 0), WIDTH // 2 - 100, HEIGHT // 2 + 50)
+        draw_text(screen, "4. Правила игры", FONT, (0, 0, 0), WIDTH // 2 - 100, HEIGHT // 2 + 100)
+        draw_text(screen, "5. Выход", FONT, (0, 0, 0), WIDTH // 2 - 100, HEIGHT // 2 + 150)
 
         pygame.display.flip()
 
@@ -446,59 +675,6 @@ def main_menu():
                     show_rules()
                 elif event.key == pygame.K_5:
                     terminate()
-
-
-def registration():
-    username = ""
-    password = ""
-    is_register = True
-
-    while True:
-        screen.fill(WHITE)
-        draw_text(screen, "Регистрация" if is_register else "Вход", FONT, BLACK, WIDTH // 2 - 100, HEIGHT // 4)
-        draw_text(screen, f"Логин: {username}", FONT, BLACK, WIDTH // 2 - 100, HEIGHT // 2 - 50)
-        draw_text(screen, f"Пароль: {'*' * len(password)}", FONT, BLACK, WIDTH // 2 - 100, HEIGHT // 2)
-        draw_text(screen, "Enter - подтвердить", FONT, BLACK, WIDTH // 2 - 100, HEIGHT // 2 + 100)
-        draw_text(screen, "Tab - переключить (регистрация/вход)", FONT, BLACK, WIDTH // 2 - 100, HEIGHT // 2 + 150)
-
-        pygame.display.flip()
-
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                terminate()
-
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_RETURN:
-                    if is_register:
-                        try:
-                            cursor.execute("INSERT INTO users (username, password) VALUES (?, ?)", (username, password))
-                            conn.commit()
-                            game_loop(username)
-                            return
-                        except sqlite3.IntegrityError:
-                            print("Логин уже существует!")
-                    else:
-                        cursor.execute("SELECT * FROM users WHERE username = ? AND password = ?", (username, password))
-                        user = cursor.fetchone()
-                        if user:
-                            game_loop(username)
-                            return
-                        else:
-                            print("Неверный логин или пароль!")
-
-                elif event.key == pygame.K_TAB:
-                    is_register = not is_register
-
-                elif event.key == pygame.K_BACKSPACE:
-                    if len(password) > 0:
-                        password = password[:-1]
-                    elif len(username) > 0:
-                        username = username[:-1]
-                else:
-                    if len(username) < 10 and len(password) == 0:
-                        username += event.unicode
-                    elif len(password) < 10:
-                        password += event.unicode
 
 
 if __name__ == "__main__":
